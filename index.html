@@ -92,6 +92,8 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 .stat span{display:block;font-size:11px;color:var(--mute)}
 .stat b{font-family:"Dela Gothic One",sans-serif;font-weight:400;font-size:18px;color:var(--gold)}
 .stat b.neg{color:var(--bad)}
+#cross{position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px 0 0 -4px;border-radius:50%;background:#f6ead7;box-shadow:0 0 0 2px #0008;z-index:2;pointer-events:none}
+#cross[hidden]{display:none}
 #loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--mute);z-index:1}
 @media(min-width:900px){#joy{display:none}}
 </style>
@@ -107,6 +109,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 <div class="chip" id="stars">★★★☆☆</div>
 <span class="sp"></span>
 <button class="chip" id="openBtn">開店する</button>
+<button class="chip" id="viewBtn">👁 1人称</button>
 <button class="chip" id="menuBtn" aria-label="メニュー">☰</button>
 </div>
 <div id="tickets"></div>
@@ -114,6 +117,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 <div id="joy"><i></i></div>
 <button id="act" disabled><span class="pr"></span><b id="actT">—</b><small id="actS" class="my"></small></button>
 <div id="toast"></div>
+<div id="cross" hidden></div>
 <div id="modal" hidden></div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -148,7 +152,7 @@ const RENT=3000,DAYLEN=300,FRIDGE=[150,400];
 
 /* ================= SAVE ================= */
 const KEY='ramen-hinata-sim-v1';
-const fresh=()=>({money:40000,day:1,rating:3,inv:{noodle:20,soup:20,gara:2,chashu:30,egg:10,negi:40,nori:30,beer:0,gyoza:0},bowls:10,up:{table:0,expand:0,boiler:0,beer:0,gyoza:0,fridge:0,chashumen:0,decor:0},staff:{cook:0,hall:0,cashier:0},sound:true,best:0,seen:false});
+const fresh=()=>({money:40000,day:1,rating:3,inv:{noodle:20,soup:20,gara:2,chashu:30,egg:10,negi:40,nori:30,beer:0,gyoza:0},bowls:10,up:{table:0,expand:0,boiler:0,beer:0,gyoza:0,fridge:0,chashumen:0,decor:0},staff:{cook:0,hall:0,cashier:0},view:'top',sound:true,best:0,seen:false});
 let SV=fresh();
 try{const r=localStorage.getItem(KEY);if(r){const p=JSON.parse(r);if(p&&p.inv&&p.up){SV=Object.assign(fresh(),p);SV.inv=Object.assign(fresh().inv,p.inv);SV.up=Object.assign(fresh().up,p.up);SV.staff=Object.assign(fresh().staff,p.staff)}}}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(SV))}catch(e){}};
@@ -211,6 +215,8 @@ M.street=new THREE.MeshBasicMaterial({map:ctex(512,256,(g,w,h)=>{const gr=g.crea
 M.asphalt=std({color:0x1c1c20,roughness:.9});
 M.steam=new THREE.SpriteMaterial({map:ctex(128,128,(g)=>{const gr=g.createRadialGradient(64,64,0,64,64,64);gr.addColorStop(0,'rgba(255,255,255,.9)');gr.addColorStop(.4,'rgba(255,255,255,.35)');gr.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=gr;g.fillRect(0,0,128,128)}),transparent:true,depthWrite:false,opacity:.2});
 M.plant=std({color:0x2f6b35,roughness:.7});M.pot=std({color:0x7a4a2a,roughness:.7});
+M.ceil=std({map:ctex(256,256,(g,w,h)=>{g.fillStyle='#c9a77a';g.fillRect(0,0,w,h);grain(g,w,h,'#7a5430',40,4);g.fillStyle='#5a3a20';for(let x=0;x<w;x+=64)g.fillRect(x,0,5,h)},[6,6]),roughness:.8,emissive:0x8a6a48,emissiveIntensity:.35});
+M.panel=new THREE.MeshBasicMaterial({color:0xfff6e6});
 M.marker=new THREE.MeshBasicMaterial({color:0xf2a541,transparent:true,opacity:.55,depthWrite:false});
 }
 function sign(text,sub,bg,fg,w,h,vert){return std({map:ctex(w,h,(g)=>{g.fillStyle=bg;g.fillRect(0,0,w,h);g.fillStyle='rgba(0,0,0,.15)';for(let i=0;i<50;i++)g.fillRect(rnd(0,w),rnd(0,h),rnd(10,60),1);g.fillStyle=fg;g.textAlign='center';g.textBaseline='middle';if(vert){const sz=Math.min(w*.62,(h*.74)/text.length);g.font=font(sz);[...text].forEach((ch,i)=>g.fillText(ch,w/2,h*.1+sz*(i+.5)));if(sub){g.font=font(w*.24,'"Zen Kaku Gothic New",sans-serif');g.fillText(sub,w/2,h*.92)}}else{g.font=font(h*(sub?.42:.55));g.fillText(text,w/2,h*(sub?.4:.52));if(sub){g.font=font(h*.18,'"Zen Kaku Gothic New",sans-serif');g.fillText(sub,w/2,h*.8)}}}),roughness:.7})}
@@ -265,7 +271,7 @@ bx(R,6.5-(KDOOR+.5),1.05,.45,M.woodDark,(KDOOR+.5+6.5)/2,.525,dz);bx(R,6.5-(KDOO
 bx(R,KDOOR-.5+5,.04,.34,M.steel,(-5+KDOOR-.5)/2,1.36,dz-.05);[-4.6,-2,.6].forEach(x=>bx(R,.04,.28,.04,M.steel,x,1.22,dz-.05));
 /* noren over kitchen door */
 const kn=new THREE.Mesh(new THREE.PlaneGeometry(1,.5),sign('厨房',null,'#7a1418','#f6ead7',256,128));kn.material.side=THREE.DoubleSide;kn.position.set(KDOOR,2.05,0);R.add(kn);
-/* lights */
+const cl=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0+.4,10.4),M.ceil);cl.rotation.x=Math.PI/2;cl.position.set((x0+x1)/2,2.85,0);cl.castShadow=false;cl.receiveShadow=false;R.add(cl);[-3,0,3].forEach(x=>{const pn=new THREE.Mesh(new THREE.BoxGeometry(1.4,.04,.22),M.panel);pn.position.set(x,2.82,-2.6);pn.castShadow=false;R.add(pn)});
 }
 function station(id,x,z,label,r){stations[id]={id,x,z,sx:x,sz:z+.95,label,r:r||1.05};colliders.push({x,z,r:.62})}
 function buildFurniture(){if(scene3.furn)scene.remove(scene3.furn);const F=new THREE.Group();scene3.furn=F;scene.add(F);stations={};colliders=[];seats=[];passSlots=[];
@@ -412,8 +418,9 @@ if(s.role==='hall'){
 function updStaff(dt){W.staff.forEach(s=>{const m=s.mesh;let spd=0;if(s.busy){s.busy.t+=dt;if(s.busy.t>=s.busy.dur){const f=s.busy.fn;s.busy=null;f&&f()}}else if(s.path.length){spd=moveAlong(s,dt,2.3);if(!s.path.length&&s.then){const f=s.then;s.then=null;f()}}else if(s.wait>0){s.wait-=dt}else if(W.phase==='open'||W.phase==='closing'||s.role==='cook'){staffThink(s)}animPerson(m,spd/2.3,dt,false)})}
 
 /* ================= PLAYER & INTERACTION ================= */
-const input={x:0,z:0,keys:{}};let tapPath=[];let near=null,pBusy=null;
-function nearest(){const P=player.position;let best=null,bd=9;targets.forEach(t=>{const d=Math.hypot(P.x-t.x,P.z-t.z);if(d<t.r&&d<bd){const l=labelFor(t);if(l&&(l.on||!best||!best.l.on)){bd=d;best={t,l}}}});return best}
+const input={x:0,z:0,keys:{}};let yaw=0,pitch=-.12;const FP=()=>SV.view==='fp';const angD=(a,b)=>{let d=a-b;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;return d};let tapPath=[];let near=null,pBusy=null;
+function aimPt(t){if(t.kind==='pass')return {x:clamp(player.position.x,-3.9,-.75),z:0};const r=t.ref;if(r&&r.x!=null)return {x:r.x,z:r.z};return t}
+function nearest(){const P=player.position,fp=FP();let best=null,bd=9;targets.forEach(t=>{const d=Math.hypot(P.x-t.x,P.z-t.z);if(d>=t.r)return;let sc=d;if(fp){const ap=aimPt(t),ad=Math.hypot(ap.x-P.x,ap.z-P.z);const ang=Math.abs(angD(Math.atan2(ap.x-P.x,ap.z-P.z),yaw));if(ang>1.15&&ad>.5)return;sc=d+ang*1.2}if(sc<bd){const l=labelFor(t);if(l&&(l.on||!best||!best.l.on)){bd=sc;best={t,l}}}});return best}
 function labelFor(t){const h=player.userData.hand,k=t.kind,s=t.ref;
 switch(k){
 case 'stove':return {t:'スープ仕込み',s:'スープ '+SV.inv.soup+'杯 · ガラ '+SV.inv.gara,on:SV.inv.gara>0&&SV.inv.soup<=60&&!h};
@@ -447,12 +454,13 @@ case 'seat':{const s=t.ref;if(s.cust&&s.cust.st==='waitOrder'&&!h){busy(1,()=>re
 res(r)}
 function res(r){if(r!==true&&r){toast(r);sfx('bad')}updHand()}
 function updPlayer(dt){if(pBusy){pBusy.t+=dt;if(pBusy.t>=pBusy.dur){const f=pBusy.fn;pBusy=null;f()}animPerson(player,0,dt,false);return}
-let ix=input.x+((input.keys.d||input.keys.arrowright)?1:0)-((input.keys.a||input.keys.arrowleft)?1:0),iz=input.z+((input.keys.s||input.keys.arrowdown)?1:0)-((input.keys.w||input.keys.arrowup)?1:0);
+const fp=FP(),K=input.keys;if(fp)yaw+=((K.arrowleft?1:0)-(K.arrowright?1:0))*dt*2.4;let ix=input.x+((K.d||(!fp&&K.arrowright))?1:0)-((K.a||(!fp&&K.arrowleft))?1:0),iz=input.z+((input.keys.s||input.keys.arrowdown)?1:0)-((input.keys.w||input.keys.arrowup)?1:0);
 const P=player.position;let mv=Math.hypot(ix,iz);
-if(mv>.08){tapPath=[];if(mv>1){ix/=mv;iz/=mv;mv=1}}else if(tapPath.length){const t=tapPath[0];const dx=t.x-P.x,dz=t.z-P.z,d=Math.hypot(dx,dz);if(d<.08){tapPath.shift()}else{ix=dx/d;iz=dz/d;mv=1}}
+if(mv>.08){tapPath=[];if(mv>1){ix/=mv;iz/=mv;mv=1}if(fp){const fx=Math.sin(yaw),fz=Math.cos(yaw),wx=fx*(-iz)-fz*ix,wz=fz*(-iz)+fx*ix;ix=wx;iz=wz}}else if(!fp&&tapPath.length){const t=tapPath[0];const dx=t.x-P.x,dz=t.z-P.z,d=Math.hypot(dx,dz);if(d<.08){tapPath.shift()}else{ix=dx/d;iz=dz/d;mv=1}}
 if(mv>.08){const sp2=3.2*mv*dt,zs=ZONES();const nx=P.x+ix*sp2/mv*mv,nz=P.z+iz*sp2/mv*mv;if(inZ(nx,nz,zs)){P.x=nx;P.z=nz}else if(inZ(nx,P.z,zs))P.x=nx;else if(inZ(P.x,nz,zs))P.z=nz;else tapPath=[];
 colliders.forEach(c=>{const dx=P.x-c.x,dz=P.z-c.z,d=Math.hypot(dx,dz),m=c.r+.22;if(d<m&&d>.001){P.x=c.x+dx/d*m;P.z=c.z+dz/d*m}});
-const a=Math.atan2(ix,iz);let da=a-player.rotation.y;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;player.rotation.y+=da*Math.min(1,dt*14)}
+if(fp){player.rotation.y=yaw}else{const a=Math.atan2(ix,iz);let da=a-player.rotation.y;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;player.rotation.y+=da*Math.min(1,dt*14)}}
+if(fp)player.rotation.y=yaw;
 animPerson(player,mv,dt,false)}
 
 /* ================= UI ================= */
@@ -475,7 +483,7 @@ if(stations.gyoza)lbl('gy',stations.gyoza.x,1.4,stations.gyoza.z,W.gyoza.st==='c
 const q=W.queue.filter(c=>!c.path.length).length;lbl('reg',stations.register.x,1.75,stations.register.z,q?'会計待ち '+q:'',q>0);
 document.querySelectorAll('[data-tk]').forEach(e=>{const t=W.tickets.find(x=>x.id==e.dataset.tk);if(t&&t.seatRef.cust){const c=t.seatRef.cust;e.style.width=(c.pat/c.patMax*100)+'%'}});
 // action button
-const b=$('act');if(pBusy){b.disabled=true;$('actT').textContent=pBusy.lbl;$('actS').textContent='';b.style.setProperty('--p',(pBusy.t/pBusy.dur*100)+'%')}else{b.style.setProperty('--p','0%');if(near){b.disabled=!near.l.on;$('actT').textContent=near.l.t;$('actS').textContent=near.l.s}else{b.disabled=true;$('actT').textContent='—';$('actS').textContent=isMobile?'ဘယ်ဘက် joystick နဲ့ လျှောက်':'WASD で移動 · E で操作'}}
+const b=$('act');if(pBusy){b.disabled=true;$('actT').textContent=pBusy.lbl;$('actS').textContent='';b.style.setProperty('--p',(pBusy.t/pBusy.dur*100)+'%')}else{b.style.setProperty('--p','0%');if(near){b.disabled=!near.l.on;$('actT').textContent=near.l.t;$('actS').textContent=near.l.s}else{b.disabled=true;$('actT').textContent='—';$('actS').textContent=FP()?(isMobile?'ညာဘက်ကို ဆွဲပြီး လှည့်ကြည့်':'ドラッグで見回す · E で操作'):(isMobile?'ဘယ်ဘက် joystick နဲ့ လျှောက်':'WASD で移動 · E で操作')}}
 // hud
 $('money').textContent=yen(SV.money);$('day').textContent=SV.day+'日目';const st=Math.round(SV.rating);$('stars').textContent='★'.repeat(st)+'☆'.repeat(5-st);
 if(W.phase==='prep'){$('clock').textContent='準備中';$('openBtn').hidden=false}else{const m=Math.floor(Math.min(W.t,DAYLEN)/DAYLEN*600);$('clock').textContent=(11+Math.floor(m/60))+':'+String(m%60).padStart(2,'0')+(W.phase==='closing'?' 閉店':'');$('openBtn').hidden=true}}
@@ -497,7 +505,7 @@ m.querySelectorAll('[data-fire]').forEach(b=>b.onclick=()=>{const k=b.dataset.fi
 $('cls').onclick=closeModal}
 function openFridge(){const rows=['noodle','gara','chashu','egg','negi','nori','beer','gyoza'].map(k=>{const v=SV.inv[k];return '<div class="it"><b>'+ITEMS[k].n+'</b><small class="my">'+ITEMS[k].my+'</small><em>'+v+(ITEMS[k].unit)+'</em></div>'}).join('');const m=modal('<h2>冷蔵庫</h2><p class="my">သိုလှောင်ထားတာ: '+invTotal()+' / '+fridgeCap()+'<div class="bar"><i style="width:'+(invTotal()/fridgeCap()*100)+'%"></i></div></p><div class="list"><div class="it"><b>スープ（仕込み済み）</b><small class="my">ချက်ပြီးသား ဟင်းရည်</small><em>'+SV.inv.soup+'杯</em></div><div class="it"><b>きれいな丼</b><small class="my">သန့်ပြီးသား ပန်းကန်</small><em>'+SV.bowls+'個</em></div>'+rows+'</div><p class="my" style="margin-top:10px">ပစ္စည်း မှာချင်ရင် ညာဘက်ထောင့်က 発注PC ကို သွားပါ။</p><button class="ghost" id="cls">閉じる</button>');$('cls').onclick=closeModal}
 function openMenu(){const m=modal('<h2>メニュー</h2><h3>ကစားပုံ</h3>'+howTo()+'<h3>設定</h3><button class="ghost" id="snd">音: '+(SV.sound?'ON':'OFF')+'</button><button class="ghost" id="rs">အစကနေ ပြန်စမယ်</button><button class="big" id="cls">ゲームに戻る</button>');$('cls').onclick=closeModal;$('snd').onclick=()=>{SV.sound=!SV.sound;save();openMenu()};let arm=false;$('rs').onclick=()=>{if(!arm){arm=true;$('rs').textContent='သေချာလား? ထပ်နှိပ်ရင် အကုန်ပျက်မယ်';return}SV=fresh();save();location.reload()}}
-function howTo(){return '<ul class="steps my"><li><b>1</b><span><strong>開店する</strong> နှိပ်ရင် ဧည့်သည် ဝင်လာပါမယ်။ ထိုင်ပြီး <strong>注文</strong> ပေါ်ရင် သွားပြီး <strong>注文を聞く</strong>။</span></li><li><b>2</b><span>စားဖိုချောင် (နောက်ဘက်) က <strong>茹で麺機</strong> မှာ ခေါက်ဆွဲပြုတ်ပါ။ ● ဖြစ်ရင် <strong>麺を上げる</strong> (✕ ဆိုရင် ပွသွားပြီ)။</span></li><li><b>3</b><span><strong>盛り付け台</strong> မှာ ပန်းကန်ပြင်ပြီး ဧည့်သည်ဆီ ယူသွား <strong>提供する</strong>။ ဘီယာ၊ ဂျိုဇာ မှာရင်လည်း ယူပေးပါ။</span></li><li><b>4</b><span>စားပြီးရင် <strong>レジ</strong> မှာ ငွေရှင်း၊ ပန်းကန်ကို <strong>片付ける</strong> ပြီး <strong>洗い場</strong> မှာ ဆေး။</span></li><li><b>5</b><span>ဟင်းရည် ကုန်ရင် <strong>スープ仕込み</strong>။ ပစ္စည်း၊ ဝန်ထမ်း၊ ဆိုင်ချဲ့တာကို <strong>発注PC</strong> မှာ လုပ်ပါ။</span></li></ul>'}
+function howTo(){return '<ul class="steps my"><li><b>1</b><span><strong>開店する</strong> နှိပ်ရင် ဧည့်သည် ဝင်လာပါမယ်။ ထိုင်ပြီး <strong>注文</strong> ပေါ်ရင် သွားပြီး <strong>注文を聞く</strong>။</span></li><li><b>2</b><span>စားဖိုချောင် (နောက်ဘက်) က <strong>茹で麺機</strong> မှာ ခေါက်ဆွဲပြုတ်ပါ။ ● ဖြစ်ရင် <strong>麺を上げる</strong> (✕ ဆိုရင် ပွသွားပြီ)။</span></li><li><b>3</b><span><strong>盛り付け台</strong> မှာ ပန်းကန်ပြင်ပြီး ဧည့်သည်ဆီ ယူသွား <strong>提供する</strong>။ ဘီယာ၊ ဂျိုဇာ မှာရင်လည်း ယူပေးပါ။</span></li><li><b>4</b><span>စားပြီးရင် <strong>レジ</strong> မှာ ငွေရှင်း၊ ပန်းကန်ကို <strong>片付ける</strong> ပြီး <strong>洗い場</strong> မှာ ဆေး။</span></li><li><b>5</b><span>ဟင်းရည် ကုန်ရင် <strong>スープ仕込み</strong>။ ပစ္စည်း၊ ဝန်ထမ်း၊ ဆိုင်ချဲ့တာကို <strong>発注PC</strong> မှာ လုပ်ပါ။</span></li><li><b>👁</b><span>အပေါ်က <strong>1人称</strong> ခလုတ် (ကီးဘုတ် V) နဲ့ ကိုယ့်မျက်လုံးနဲ့ မြင်တဲ့ view ကို ပြောင်းလို့ရ။ မျက်နှာပြင်ကို ဆွဲရင် လှည့်ကြည့်၊ တစ်ချက်နှိပ်ရင် လုပ်ဆောင်။</span></li></ul>'}
 function showStart(){const m=modal('<h1>麺屋<em>ひなた</em></h1><p class="my">ကိုယ်ပိုင် ရာမင်ဆိုင်လေးကို စီမံပါ။ ချက်ပြုတ်၊ ကျွေး၊ ငွေရှင်း၊ ပစ္စည်းမှာ၊ ဝန်ထမ်းငှား၊ ဆိုင်ချဲ့ပြီး မြို့ရဲ့ နာမည်ကြီး ရာမင်ဆိုင် ဖြစ်အောင် လုပ်ပါ။</p>'+howTo()+'<button class="big" id="go">'+(SV.seen?SV.day+'日目 から続ける':'はじめる')+'</button><p class="my" style="margin:10px 0 0;font-size:12px">ကွန်ပျူတာ: WASD/မြှား = လျှောက်၊ E/Space = လုပ်ဆောင်။ ဖုန်း: ဘယ်ဘက် joystick (သို့) ကြမ်းပြင်ကို နှိပ်ရင် လျှောက်သွားပါမယ်။</p>');$('go').onclick=()=>{SV.seen=true;save();closeModal();try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();AC.resume()}catch(e){}sfx('door');toast('準備中 · ပြင်ဆင်ပြီးရင် <b>開店する</b> နှိပ်ပါ')}}
 function openShop(){if(W.phase!=='prep')return;W.t=0;W.spawnT=3;W.phase='open';sfx('door');speak('開店です');toast('開店！ ဧည့်သည်တွေ လာပါတော့မယ်')}
 function endDay(){W.phase='summary';const wages=Object.keys(STAFF).reduce((a,k)=>a+STAFF[k].wage*SV.staff[k],0);SV.money-=wages+RENT;const s=W.stats,profit=s.sales+s.tips-wages-RENT-s.cost;if(s.sales>SV.best)SV.best=s.sales;save();
@@ -512,11 +520,18 @@ $('act').addEventListener('click',doAct);
 $('openBtn').onclick=openShop;$('menuBtn').onclick=openMenu;
 {const j=$('joy'),k=j.firstChild;let id=null;const R2=50;const set=(e)=>{const r=j.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const d=Math.hypot(dx,dy);if(d>R2){dx=dx/d*R2;dy=dy/d*R2}k.style.transform='translate('+dx+'px,'+dy+'px)';input.x=dx/R2;input.z=dy/R2};
 j.addEventListener('pointerdown',e=>{id=e.pointerId;j.setPointerCapture(id);set(e)});j.addEventListener('pointermove',e=>{if(e.pointerId===id)set(e)});const end=e=>{if(e.pointerId!==id)return;id=null;k.style.transform='';input.x=0;input.z=0};j.addEventListener('pointerup',end);j.addEventListener('pointercancel',end)}
-{const ray=new THREE.Raycaster(),plane=new THREE.Plane(new THREE.Vector3(0,1,0),0),hit=new THREE.Vector3();let down=null;canvas.addEventListener('pointerdown',e=>{down={x:e.clientX,y:e.clientY,t:performance.now()}});canvas.addEventListener('pointerup',e=>{if(!down)return;const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(moved>12||performance.now()-down.t>500){down=null;return}down=null;const r=canvas.getBoundingClientRect();ray.setFromCamera({x:(e.clientX-r.left)/r.width*2-1,y:-(e.clientY-r.top)/r.height*2+1},camera);if(ray.ray.intersectPlane(plane,hit)){const zs=ZONES();let tx=clamp(hit.x,minX()+.1,6.2),tz=clamp(hit.z,-3.85,4.7);if(!inZ(tx,tz,zs))tz=tz<0?Math.min(tz,-.45):Math.max(tz,.5);tapPath=route(player.position,{x:tx,z:tz});if(!marker){marker=new THREE.Mesh(new THREE.RingGeometry(.15,.24,24),M.marker);marker.rotation.x=-Math.PI/2;scene.add(marker)}marker.position.set(tx,.02,tz);marker.visible=true;markerT=.8}})}
+{const ray=new THREE.Raycaster(),plane=new THREE.Plane(new THREE.Vector3(0,1,0),0),hit=new THREE.Vector3();let down=null;canvas.addEventListener('pointerdown',e=>{if(down)return;down={id:e.pointerId,x:e.clientX,y:e.clientY,lx:e.clientX,ly:e.clientY,t:performance.now()};try{canvas.setPointerCapture(e.pointerId)}catch(_){}});canvas.addEventListener('pointermove',e=>{if(!down||e.pointerId!==down.id||!FP())return;const k=e.pointerType==='touch'?.007:.005;yaw-=(e.clientX-down.lx)*k;pitch=clamp(pitch-(e.clientY-down.ly)*k,-1.1,.9);down.lx=e.clientX;down.ly=e.clientY});canvas.addEventListener('pointercancel',e=>{if(down&&e.pointerId===down.id)down=null});canvas.addEventListener('pointerup',e=>{if(!down||e.pointerId!==down.id)return;const moved=Math.hypot(e.clientX-down.x,e.clientY-down.y);if(moved>12||performance.now()-down.t>500){down=null;return}down=null;if(FP()){doAct();return}const r=canvas.getBoundingClientRect();ray.setFromCamera({x:(e.clientX-r.left)/r.width*2-1,y:-(e.clientY-r.top)/r.height*2+1},camera);if(ray.ray.intersectPlane(plane,hit)){const zs=ZONES();let tx=clamp(hit.x,minX()+.1,6.2),tz=clamp(hit.z,-3.85,4.7);if(!inZ(tx,tz,zs))tz=tz<0?Math.min(tz,-.45):Math.max(tz,.5);tapPath=route(player.position,{x:tx,z:tz});if(!marker){marker=new THREE.Mesh(new THREE.RingGeometry(.15,.24,24),M.marker);marker.rotation.x=-Math.PI/2;scene.add(marker)}marker.position.set(tx,.02,tz);marker.visible=true;markerT=.8}})}
 let marker=null,markerT=0;
 
+/* ================= FIRST PERSON ================= */
+let vmKey='';
+function updVM(T){if(!G3.vm){G3.vm=new THREE.Group();camera.add(G3.vm)}G3.vm.visible=true;const h=player.userData.hand,k=h?(h.kind+(h.type||'')+(h.n||'')):'';if(k!==vmKey){vmKey=k;while(G3.vm.children.length)G3.vm.remove(G3.vm.children[0]);if(h){const d=dish(h.kind,h.type);if(h.kind==='dirty'&&h.n>1){for(let i=1;i<Math.min(h.n,4);i++){const b=new THREE.Mesh(gBowl,M.bowlOut);b.position.y=i*.05;d.add(b)}}d.traverse(o=>{o.castShadow=false;o.receiveShadow=false});d.rotation.x=.35;G3.vm.add(d)}}const mv=Math.hypot(input.x,input.z)>.1||['w','a','s','d'].some(q=>input.keys[q]);G3.vm.position.set(.17,-.3+(mv?Math.sin(T*9)*.012:0),-.5)}
+function setView(v){SV.view=v;save();if(v==='fp'){yaw=player.rotation.y;pitch=-.12;tapPath=[];if(marker)marker.visible=false}$('viewBtn').textContent=v==='fp'?'🗺 3人称':'👁 1人称';resize();toast(v==='fp'?'1人称 · '+(isMobile?'ညာဘက်ကို ဆွဲပြီး လှည့်ကြည့်ပါ':'ドラッグで見回す · クリックで操作'):'3人称 · အပေါ်စီး view')}
+$('viewBtn').onclick=()=>setView(FP()?'top':'fp');
+addEventListener('keydown',e=>{if(e.key.toLowerCase()==='v'&&$('modal').hidden)setView(FP()?'top':'fp')});
+
 /* ================= LOOP ================= */
-function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.fov=w<h?54:44;camera.updateProjectionMatrix()}
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;const fp=SV.view==='fp';camera.fov=fp?(w<h?82:68):(w<h?54:44);camera.near=fp?.04:.1;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);
 let last=performance.now(),T=0;const camPos=new THREE.Vector3();
 function tick(now){requestAnimationFrame(tick);const dt=Math.min(.05,(now-last)/1000);last=now;T+=dt;
@@ -532,11 +547,13 @@ updCustomers(dt);updStaff(dt);updSteam(dt);
 G3.lanterns&&G3.lanterns.forEach((l,i)=>l.rotation.z=Math.sin(T*.9+i*2)*.05);
 if(marker&&marker.visible){markerT-=dt;marker.scale.setScalar(1+(.8-markerT));if(markerT<=0)marker.visible=false}
 near=player?nearest():null;
-const P=player.position,portrait=innerWidth<innerHeight;const cx=portrait?P.x:clamp(P.x,minX()+3,3.6);const tz=Math.max(P.z,portrait?-1.1:-1.6);camPos.set(cx,portrait?15:10.5,tz+(portrait?6.2:7.6));camera.position.lerp(camPos,Math.min(1,dt*4));camera.lookAt(cx,0.4,tz-(portrait?.2:.8));
+const P=player.position;if(FP()){player.visible=false;const ub=player.userData.body.position.y,hx=P.x+Math.sin(yaw)*.06,hz=P.z+Math.cos(yaw)*.06,hy=1.56+ub*.6;camera.position.set(hx,hy,hz);camera.lookAt(hx+Math.sin(yaw)*Math.cos(pitch),hy+Math.sin(pitch),hz+Math.cos(yaw)*Math.cos(pitch));updVM(T)}else{player.visible=true;if(G3.vm)G3.vm.visible=false;
+const portrait=innerWidth<innerHeight;const cx=portrait?P.x:clamp(P.x,minX()+3,3.6);const tz=Math.max(P.z,portrait?-1.1:-1.6);camPos.set(cx,portrait?15:10.5,tz+(portrait?6.2:7.6));camera.position.lerp(camPos,Math.min(1,dt*4));camera.lookAt(cx,0.4,tz-(portrait?.2:.8))}
+$('cross').hidden=!FP()||!$('modal').hidden;
 renderer.render(scene,camera);drawUI()}
 
 /* ================= BOOT ================= */
-function boot(){mats();lights();buildRoom();buildFurniture();resetDay();player=person({top:std({color:0xf4f1ea,roughness:.7}),hat:std({color:0x1c2b4a,roughness:.7}),apron:std({color:0x1c2b4a,roughness:.8}),pants:M.pants[0]});player.position.set(-.8,0,-2.8);scene.add(player);spawnStaff();resize();$('loading').remove();requestAnimationFrame(tick);showStart()}
+function boot(){mats();lights();buildRoom();buildFurniture();resetDay();player=person({top:std({color:0xf4f1ea,roughness:.7}),hat:std({color:0x1c2b4a,roughness:.7}),apron:std({color:0x1c2b4a,roughness:.8}),pants:M.pants[0]});player.position.set(-.8,0,-2.8);scene.add(player);scene.add(camera);$('viewBtn').textContent=FP()?'🗺 3人称':'👁 1人称';yaw=player.rotation.y;spawnStaff();resize();$('loading').remove();requestAnimationFrame(tick);showStart()}
 let booted=false;const once=()=>{if(booted)return;booted=true;boot()};
 const fr=document.fonts&&document.fonts.ready?Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,2500))]):Promise.resolve();
 fr.then(()=>{try{Promise.race([document.fonts.load('40px "Dela Gothic One"'),new Promise(r=>setTimeout(r,1500))]).then(once,once)}catch(e){once()}});
